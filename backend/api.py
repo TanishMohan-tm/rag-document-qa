@@ -32,7 +32,8 @@ from pydantic import BaseModel
 
 # CRITICAL: load_dotenv() must run BEFORE importing our modules
 # because chain.py and ingest.py call os.getenv() at import time
-load_dotenv()
+from pathlib import Path
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 from chain import answer_question
 from ingest import ingest_pdf, list_documents

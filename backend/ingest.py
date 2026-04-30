@@ -21,7 +21,8 @@ from langchain_community.vectorstores import FAISS
 
 # Load environment variables from .env file
 # MUST be called before any os.getenv() calls
-load_dotenv()
+from pathlib import Path
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 # Where to save FAISS indexes on disk
 # Path() creates a path object that works on Mac, Windows, Linux
