@@ -25,14 +25,14 @@ so you can verify the source.
 ## Architecture
 ```
 ┌─────────────┐    ┌─────────────┐    ┌──────────────┐
-│  Frontend   │    │   Backend   │    │   Vector DB    │
+│  Frontend   │    │   Backend   │    │   Vector DB  │
 │  (Next.js)  │    │  (FastAPI)  │    │   (FAISS)    │
-│  client.tsx │    │   main.py   │    │ data/vectors/  │
+│  client.tsx │    │   main.py   │    │ data/vectors │
 └──────┬──────┘    └──────┬──────┘    └───────┬──────┘
-       │ GET /docs          │ load PDF        │
-       │                   │ split into chunks │
-       │                   │ create FAISS    │
-       │                   └───────────────┬─┘
+       │ GET /docs        │ load PDF          │
+       │                  │ split into chunks │
+       │                  │ create FAISS      │
+       │                  └───────────────┬─  ┘
        │
        │ POST /ask
        │    │
