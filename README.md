@@ -26,8 +26,8 @@ so you can verify the source.
 ```
 ┌─────────────┐    ┌─────────────┐    ┌──────────────┐
 │  Frontend   │    │   Backend   │    │   Vector DB  │
-│  (Next.js)  │    │  (FastAPI)  │    │   (FAISS)    │
-│  client.tsx │    │   main.py   │    │ data/vectors │
+│ (Streamlit) │    │  (FastAPI)  │    │   (FAISS)    │
+│   app.py    │    │   api.py    │    │ data/vectors │
 └──────┬──────┘    └──────┬──────┘    └───────┬──────┘
        │ GET /docs        │ load PDF          │
        │                  │ split into chunks │

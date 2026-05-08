@@ -1,19 +1,4 @@
-"""
-app.py
-
-WHAT THIS FILE DOES:
-The Streamlit web interface. Runs on localhost:8501.
-Makes HTTP calls to the FastAPI backend on localhost:8000.
-
-This file contains ONLY UI code.
-No PDF processing, no embeddings, no LLM calls happen here.
-Everything goes through the API.
-
-HOW TO RUN:
-cd frontend
-streamlit run app.py
-Then open http://localhost:8501
-"""
+"""Streamlit frontend for the RAG Document QA system."""
 
 import os
 import json
@@ -21,13 +6,9 @@ import json
 import requests
 import streamlit as st
 
-# Where the backend API lives
-# In local dev: http://localhost:8000
-# In Docker: http://backend:8000 (Docker's internal network uses service names)
-# On Railway: https://your-backend.up.railway.app (set via environment variable)
 API_URL = os.getenv("API_URL", "http://localhost:8000").rstrip("/")
 
-# ── Page Configuration ────────────────────────────────────────────────────────
+
 st.set_page_config(
     page_title="RAG Document Analysis",
     page_icon="·",
@@ -35,28 +16,25 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Case Study Theme CSS (Playfair Display, Source Serif 4, DM Sans, JetBrains Mono) ──
 st.markdown("""
 <style>
-    /* Import fonts from the case study page */
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;1,8..60,300&family=DM+Sans:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap');
 
-    /* Global settings */
     html, body, [class*="st-"] {
         font-family: 'Source Serif 4', serif !important;
-        color: #f0ede8 !important;      /* warm off-white */
+        color: #f0ede8 !important;
         font-size: 15px !important;
         line-height: 1.6 !important;
-        font-weight: 300 !important;    /* light weight like case study prose */
+        font-weight: 300 !important;
     }
 
-    /* Block container */
+
     .block-container {
         padding-top: 2rem !important;
         padding-bottom: 0rem !important;
     }
 
-    /* Captions / secondary text */
+
     .stCaption, [data-testid="stCaptionContainer"] {
         font-family: 'DM Sans', sans-serif !important;
         color: #b0aaa0 !important;
@@ -64,25 +42,25 @@ st.markdown("""
         font-weight: 400 !important;
     }
 
-    /* ===== HEADINGS – Playfair Display (serif, bold) ===== */
+
     h1, h2, h3, h4, h5, h6 {
         font-family: 'Playfair Display', serif !important;
         font-weight: 700 !important;
         font-style: normal !important;
-        color: #D97757 !important;        /* coral accent */
+        color: #D97757 !important;
         letter-spacing: -0.02em !important;
         margin-top: 0.5rem !important;
         margin-bottom: 0.5rem !important;
     }
 
-    /* Main title – add a subtle italic for flair (like the case study's <em>) */
+
     .stApp header + div h1:first-of-type {
         font-style: italic !important;
         font-weight: 800 !important;
         font-size: 3.5rem !important;
     }
 
-    /* Sidebar headings */
+
     [data-testid="stSidebar"] h1,
     [data-testid="stSidebar"] h2,
     [data-testid="stSidebar"] h3 {
@@ -90,17 +68,17 @@ st.markdown("""
         font-family: 'Playfair Display', serif !important;
     }
 
-    /* Hide anchor links */
+
     [data-testid="stHeaderActionElements"], .stMarkdown h1 a, .stMarkdown h2 a, .stMarkdown h3 a {
         display: none !important;
     }
 
-    /* Background */
+
     .stApp {
         background-color: #1a1a1a;
     }
 
-    /* Hide Streamlit UI chrome */
+
     #MainMenu, footer, header {
         visibility: hidden;
     }
@@ -108,7 +86,7 @@ st.markdown("""
         display: none;
     }
 
-    /* Sidebar */
+
     [data-testid="stSidebar"] {
         background-color: #141414;
         border-right: 1px solid #2d2a28;
@@ -118,7 +96,7 @@ st.markdown("""
         font-family: 'Source Serif 4', serif !important;
     }
 
-    /* Chat input area */
+
     .stChatInputContainer {
         border-top: none;
         padding-top: 0;
@@ -132,7 +110,7 @@ st.markdown("""
         font-size: 14px !important;
     }
 
-    /* Chat messages */
+
     [data-testid="stChatMessage"] {
         background-color: transparent;
         border-radius: 0;
@@ -148,7 +126,7 @@ st.markdown("""
         border-bottom: 1px solid #2d2a28;
     }
 
-    /* Source cards – coral left border */
+
     .source-card {
         background: #252220;
         border-left: 2px solid #D97757;
@@ -173,7 +151,7 @@ st.markdown("""
         margin-top: 4px;
     }
 
-    /* Buttons – DM Sans */
+
     .stButton>button {
         background-color: #252220 !important;
         color: #f0ede8 !important;
@@ -199,7 +177,7 @@ st.markdown("""
         color: #FFFFFF !important;
     }
 
-    /* Metrics – Playfair for values, DM Sans for labels */
+
     [data-testid="stMetricValue"] {
         color: #D97757 !important;
         font-family: 'Playfair Display', serif !important;
@@ -215,7 +193,7 @@ st.markdown("""
         border-color: #2d2a28 !important;
     }
 
-    /* Code – JetBrains Mono */
+
     code {
         color: #D97757 !important;
         background: #252220 !important;
@@ -229,7 +207,7 @@ st.markdown("""
         font-family: 'JetBrains Mono', monospace !important;
     }
 
-    /* Form elements */
+
     label, .stSelectbox, .stFileUploader {
         font-family: 'DM Sans', sans-serif !important;
         color: #f0ede8 !important;
@@ -254,7 +232,7 @@ st.markdown("""
         font-weight: 600 !important;
     }
 
-    /* Tabs */
+
     .stTabs [data-baseweb="tab-list"] {
         border-bottom-color: #2d2a28 !important;
     }
@@ -267,7 +245,7 @@ st.markdown("""
         border-bottom-color: #D97757 !important;
     }
 
-    /* Alerts */
+
     .stAlert {
         background-color: #252220 !important;
         color: #f0ede8 !important;
@@ -275,7 +253,7 @@ st.markdown("""
         font-family: 'DM Sans', sans-serif !important;
     }
 
-    /* Dropdowns */
+
     [data-baseweb="select"] {
         background-color: #252220 !important;
     }
@@ -295,7 +273,7 @@ st.markdown("""
         background-color: #3a3632 !important;
     }
 
-    /* Hide scrollbars */
+
     ::-webkit-scrollbar {
         width: 0px !important;
         height: 0px !important;
@@ -316,7 +294,7 @@ st.markdown("""
         display: none !important;
     }
 
-    /* Body text overrides */
+
     .stMarkdown, .stMarkdown p, .stMarkdown li, .stMarkdown ol, .stMarkdown ul {
         color: #f0ede8 !important;
         font-size: 15px !important;
@@ -333,20 +311,20 @@ st.markdown("""
         font-style: italic;
     }
 
-    /* Section label styling (I. Ingestion, etc.) */
+
     .stMarkdown h3 + p strong:first-child {
         color: #D97757 !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# ── Sidebar ───────────────────────────────────────────────────────────────────
+
 with st.sidebar:
     st.title("Document Analysis")
     st.caption("Retrieval-Augmented Generation Indexing")
     st.divider()
 
-    # ── SECTION 1: Upload a new PDF ───────────────────────────────────
+
     st.markdown('<p style="color: #D97757; font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 0.5rem;">I. Ingestion</p>', unsafe_allow_html=True)
 
     uploaded_file = st.file_uploader(
@@ -392,7 +370,7 @@ with st.sidebar:
 
     st.divider()
 
-    # ── SECTION 2: Select an already-ingested document ────────────────
+
     st.markdown('<p style="color: #D97757; font-size: 12px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; margin-top: 1rem; margin-bottom: 0.5rem;">II. Active Workspace</p>', unsafe_allow_html=True)
     try:
         docs_resp = requests.get(f"{API_URL}/documents", timeout=5)
@@ -420,7 +398,7 @@ with st.sidebar:
         st.code(st.session_state["doc_id"], language=None)
 
 
-# ── Main Area ─────────────────────────────────────────────────────────────────
+
 
 if "doc_id" not in st.session_state:
     st.markdown("""
@@ -469,9 +447,7 @@ st.markdown(f"## {doc_id}")
 tab_chat, tab_eval = st.tabs(["Query Interface", "Quantitative Evaluation"])
 
 
-# ════════════════════════════════════════════════════════════════════════════
-# TAB 1: CHAT
-# ════════════════════════════════════════════════════════════════════════════
+
 with tab_chat:
 
     if "messages" not in st.session_state:
@@ -546,9 +522,7 @@ with tab_chat:
                             )
 
 
-# ════════════════════════════════════════════════════════════════════════════
-# TAB 2: EVALUATE
-# ════════════════════════════════════════════════════════════════════════════
+
 with tab_eval:
     st.markdown("""
     ### Pipeline Evaluation Metrics
