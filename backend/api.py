@@ -1,5 +1,6 @@
 """FastAPI application for the RAG Document QA backend."""
 
+import hashlib
 import os
 import shutil
 import uuid
@@ -10,11 +11,12 @@ import numpy as np
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-from chain import answer_question
+from chain import answer_question, get_llm, RAG_PROMPT, _format_context, _build_sources
 from ingest import ingest_pdf, list_documents
 from retriever import retrieve, retrieve_with_scores
 
@@ -34,11 +36,36 @@ app.add_middleware(
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "data/uploads"))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
+# ── In-memory answer cache (keeps last 100 answers) ───────────────────────────
+_answer_cache: dict = {}
+
+
+def _cache_key(doc_id: str, question: str, k: int) -> str:
+    """Generate a unique cache key from request parameters."""
+    raw = f"{doc_id}:{question.lower().strip()}:{k}"
+    return hashlib.md5(raw.encode()).hexdigest()
+
+
+# ── Startup: pre-load embedding model so first request isn't slow ─────────────
+@app.on_event("startup")
+async def startup_event():
+    """
+    Pre-loads the HuggingFace embedding model when the server starts.
+    Without this, the first request takes 3-5 extra seconds while the
+    model loads from disk into memory.
+    """
+    from ingest import get_embeddings
+    print("Pre-loading embedding model...")
+    get_embeddings()
+    print("Embedding model ready.")
+
+
+# ── Request / Response models ─────────────────────────────────────────────────
 
 class AskRequest(BaseModel):
     doc_id: str
     question: str
-    k: int = 4
+    k: int = 3   # reduced from 4 → 3: smaller context = faster LLM response
 
 
 class EvalPair(BaseModel):
@@ -51,8 +78,10 @@ class EvaluateRequest(BaseModel):
     pairs: List[EvalPair]
 
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
 def _semantic_similarity(text_a: str, text_b: str) -> float:
-    """Computes cosine similarity between two text strings."""
+    """Computes cosine similarity between two text strings using sentence-transformers."""
     from sentence_transformers import SentenceTransformer, util as st_util
 
     if not hasattr(_semantic_similarity, "_model"):
@@ -63,6 +92,8 @@ def _semantic_similarity(text_a: str, text_b: str) -> float:
     emb_b = model.encode(text_b, convert_to_tensor=True)
     return float(st_util.cos_sim(emb_a, emb_b).item())
 
+
+# ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @app.get("/", tags=["health"])
 def root():
@@ -92,7 +123,6 @@ async def ingest(file: UploadFile = File(...)):
     try:
         with open(tmp_path, "wb") as f:
             shutil.copyfileobj(file.file, f)
-
         result = ingest_pdf(str(tmp_path), doc_id)
         return {"status": "success", **result}
     except Exception as exc:
@@ -106,7 +136,20 @@ async def ingest(file: UploadFile = File(...)):
 
 @app.post("/ask", tags=["qa"])
 def ask(req: AskRequest):
-    """Processes a question regarding an ingested document and returns an answer."""
+    """
+    Processes a question about an ingested document and returns an answer.
+
+    Performance features:
+    - Answer cache: identical questions return instantly (no LLM call)
+    - k=3 default: smaller context = faster LLM generation
+    """
+    # Check cache first — identical question returns immediately
+    key = _cache_key(req.doc_id, req.question, req.k)
+    if key in _answer_cache:
+        cached = _answer_cache[key].copy()
+        cached["cached"] = True
+        return cached
+
     try:
         docs = retrieve(req.doc_id, req.question, k=req.k)
     except FileNotFoundError as exc:
@@ -120,11 +163,57 @@ def ask(req: AskRequest):
         }
 
     try:
-        return answer_question(docs, req.question)
+        result = answer_question(docs, req.question)
+
+        # Store in cache — evict oldest entry if over 100 items
+        if len(_answer_cache) >= 100:
+            oldest_key = next(iter(_answer_cache))
+            del _answer_cache[oldest_key]
+        _answer_cache[key] = result
+
+        return result
     except EnvironmentError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/ask-stream", tags=["qa"])
+async def ask_stream(req: AskRequest):
+    """
+    Streaming version of /ask.
+    Tokens appear in the UI as they are generated instead of waiting
+    for the full response — makes latency feel near-instant.
+
+    Returns a text/plain stream of tokens.
+    """
+    try:
+        docs = retrieve(req.doc_id, req.question, k=req.k)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    if not docs:
+        async def empty():
+            yield "No relevant content found in the document for this question."
+        return StreamingResponse(empty(), media_type="text/plain")
+
+    from langchain_core.output_parsers import StrOutputParser
+
+    try:
+        llm = get_llm()
+    except EnvironmentError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    chain = RAG_PROMPT | llm | StrOutputParser()
+
+    async def token_generator():
+        async for token in chain.astream({
+            "context": _format_context(docs),
+            "question": req.question,
+        }):
+            yield token
+
+    return StreamingResponse(token_generator(), media_type="text/plain")
 
 
 @app.post("/evaluate", tags=["evaluation"])

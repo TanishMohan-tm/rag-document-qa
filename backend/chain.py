@@ -20,7 +20,7 @@ def get_llm():
 
     if groq_key and groq_key != "your_groq_key_here":
         from langchain_groq import ChatGroq
-        return ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
+        return ChatGroq(model="llama-3.1-8b-instant", temperature=0)
 
     raise EnvironmentError(
         "No LLM API key found. Set GROQ_API_KEY or OPENAI_API_KEY in your .env file."
