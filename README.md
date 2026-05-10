@@ -61,7 +61,7 @@ so you can verify the source.
 | Orchestration | LangChain 0.2 (LCEL) |
 | Embeddings | HuggingFace all-MiniLM-L6-v2 (free, local) |
 | Vector Store | FAISS (local, no external DB) |
-| LLM | Groq Llama 3.3 70B (free tier) |
+| LLM | Groq Llama 3.1 8B (free tier) |
 | Frontend | Streamlit |
 | Deployment | Docker + Railway |
 

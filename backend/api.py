@@ -36,7 +36,6 @@ app.add_middleware(
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "data/uploads"))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-# ── In-memory answer cache (keeps last 100 answers) ───────────────────────────
 _answer_cache: dict = {}
 
 
@@ -45,27 +44,10 @@ def _cache_key(doc_id: str, question: str, k: int) -> str:
     raw = f"{doc_id}:{question.lower().strip()}:{k}"
     return hashlib.md5(raw.encode()).hexdigest()
 
-
-# ── Startup: pre-load embedding model so first request isn't slow ─────────────
-@app.on_event("startup")
-async def startup_event():
-    """
-    Pre-loads the HuggingFace embedding model when the server starts.
-    Without this, the first request takes 3-5 extra seconds while the
-    model loads from disk into memory.
-    """
-    from ingest import get_embeddings
-    print("Pre-loading embedding model...")
-    get_embeddings()
-    print("Embedding model ready.")
-
-
-# ── Request / Response models ─────────────────────────────────────────────────
-
 class AskRequest(BaseModel):
     doc_id: str
     question: str
-    k: int = 3   # reduced from 4 → 3: smaller context = faster LLM response
+    k: int = 3
 
 
 class EvalPair(BaseModel):
@@ -78,7 +60,6 @@ class EvaluateRequest(BaseModel):
     pairs: List[EvalPair]
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _semantic_similarity(text_a: str, text_b: str) -> float:
     """Computes cosine similarity between two text strings using sentence-transformers."""
@@ -93,7 +74,6 @@ def _semantic_similarity(text_a: str, text_b: str) -> float:
     return float(st_util.cos_sim(emb_a, emb_b).item())
 
 
-# ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @app.get("/", tags=["health"])
 def root():
@@ -136,14 +116,7 @@ async def ingest(file: UploadFile = File(...)):
 
 @app.post("/ask", tags=["qa"])
 def ask(req: AskRequest):
-    """
-    Processes a question about an ingested document and returns an answer.
-
-    Performance features:
-    - Answer cache: identical questions return instantly (no LLM call)
-    - k=3 default: smaller context = faster LLM generation
-    """
-    # Check cache first — identical question returns immediately
+    """Processes a question about an ingested document and returns an answer."""
     key = _cache_key(req.doc_id, req.question, req.k)
     if key in _answer_cache:
         cached = _answer_cache[key].copy()
@@ -165,7 +138,6 @@ def ask(req: AskRequest):
     try:
         result = answer_question(docs, req.question)
 
-        # Store in cache — evict oldest entry if over 100 items
         if len(_answer_cache) >= 100:
             oldest_key = next(iter(_answer_cache))
             del _answer_cache[oldest_key]
@@ -180,13 +152,7 @@ def ask(req: AskRequest):
 
 @app.post("/ask-stream", tags=["qa"])
 async def ask_stream(req: AskRequest):
-    """
-    Streaming version of /ask.
-    Tokens appear in the UI as they are generated instead of waiting
-    for the full response — makes latency feel near-instant.
-
-    Returns a text/plain stream of tokens.
-    """
+    """Streaming version of /ask returning a text/plain stream of tokens."""
     try:
         docs = retrieve(req.doc_id, req.question, k=req.k)
     except FileNotFoundError as exc:
