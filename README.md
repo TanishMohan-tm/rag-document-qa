@@ -2,8 +2,6 @@
 
 > Upload any PDF. Ask questions in plain English. Get answers with page citations.
 
-**[🚀 Live Demo](https://splendid-empathy-production-ac0d.up.railway.app)**
-
 ![Python](https://img.shields.io/badge/Python-3.11-blue?logo=python)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.111-green?logo=fastapi)
 ![LangChain](https://img.shields.io/badge/LangChain-0.2-orange)
@@ -63,7 +61,7 @@ so you can verify the source.
 | Vector Store | FAISS (local, no external DB) |
 | LLM | Groq Llama 3.1 8B (free tier) |
 | Frontend | Streamlit |
-| Deployment | Docker + Railway |
+| Deployment | Docker |
 
 ---
 
@@ -123,6 +121,6 @@ Everything runs free:
 - **Embeddings:** HuggingFace model runs locally on CPU
 - **LLM:** Groq free tier (6,000 req/day, no credit card)
 - **Vector DB:** FAISS saves to disk (2 files)
-- **Hosting:** Railway free tier
+- **Hosting:** Local (Docker)
 
 Total: **$0**

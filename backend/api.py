@@ -3,7 +3,7 @@
 import hashlib
 import os
 import shutil
-import uuid
+import uuid 
 from pathlib import Path
 from typing import List
 
@@ -47,7 +47,7 @@ def _cache_key(doc_id: str, question: str, k: int) -> str:
 class AskRequest(BaseModel):
     doc_id: str
     question: str
-    k: int = 3
+    k: int = 5
 
 
 class EvalPair(BaseModel):

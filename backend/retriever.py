@@ -16,7 +16,7 @@ def retrieve(doc_id: str, query: str, k: int = 4) -> List[Document]:
         search_type="mmr",
         search_kwargs={
             "k": k,
-            "fetch_k": min(k * 3, 20),
+            "fetch_k": max(k * 4, 30),
         },
     )
 
